@@ -7,6 +7,7 @@ import javafx.event.EventHandler;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle ;
@@ -14,24 +15,36 @@ import javafx.scene.shape.Rectangle ;
 import java.awt.*;
 import javafx.scene.control.Button;
 import java.awt.event.KeyEvent;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Rectangle2D;
+import java.awt.geom.Rectangle2D.Double;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.List;
 
 import javafx.scene.Group;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.PDFTextStripperByArea;
+import org.apache.pdfbox.tools.PDFBox;
 
 import javax.imageio.ImageIO;
-
+import javax.swing.*;
+import java.nio.file.Paths;
+import java.nio.file.Files;
 
 public class DocsFox extends Application
 {
     double starting_point_x, starting_point_y ;
+    double startimagex,startimagey;
 
     Group rectangle = new Group() ;
 
@@ -69,8 +82,10 @@ public class DocsFox extends Application
         }
     }
 
+    Rectangle2D testRect = new Rectangle2D.Double();
 
     public void start( Stage stage ) throws IOException {
+        PDFTextStripperByArea PDArea = new PDFTextStripperByArea();
         final int[] cPage = {0};
         PDDocument doc = PDDocument.load(new File("C:/Users/Oscar/IdeaProjects/Software Engineering Project/z_X10001 LLP Sheet 1 page.pdf"));
         PDFRenderer renderer = new PDFRenderer(doc);
@@ -82,24 +97,38 @@ public class DocsFox extends Application
         }
 
         Image image = SwingFXUtils.toFXImage(Pages[0], null );
-        //Creating an image
-        //Image image = new Image(new FileInputStream("C://Users//User//Videos//Captures//LLP Page 2.png"));
 
-        //Setting the image view
         ImageView imageView = new ImageView(image);
 
         Button button = new Button("Confirm");
         Button button2 = new Button("Next page");
+        Button button3 = new Button("Continue");
         HBox hbox = new HBox();
         hbox.getChildren().add(button);
         hbox.getChildren().add(button2);
+        hbox.getChildren().add(button3);
+
+        final List<List<String>> data = new ArrayList<List<String>>();
 
         button.setOnAction(new EventHandler<ActionEvent>()
         {
             @Override
             public void handle(ActionEvent event)
             {
-                System.out.println("Hello World");
+                PDArea.addRegion("Test",testRect);
+                try {
+                    PDArea.extractRegions(doc.getPage(cPage[0]));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                final List<String> x = new ArrayList<String>();
+                String[] split = (PDArea.getTextForRegion("Test")).split("\\n");;
+                for(String newLine : split)
+                {
+                    x.add(newLine);
+                }
+                data.add(x);
+                //System.out.println(PDArea.getTextForRegion("Test"));
             }
         });
 
@@ -120,15 +149,34 @@ public class DocsFox extends Application
             }
         });
 
-
+        button3.setOnAction(new EventHandler<ActionEvent>()
+        {
+            @Override
+            public void handle(ActionEvent event)
+            {
+                final String separate = System.getProperty(",");
+                try
+                {
+                    StringBuilder sb = new StringBuilder();
+                    for(int n = 0; n < data.size(); n++)
+                    {
+                        sb.append(data.get(n));
+                    }
+                    Files.write(Paths.get("C:/Users/Oscar/IdeaProjects/Sprint2/docsfox.csv"), sb.toString().getBytes());
+                    System.out.println("csv file saved!");
+                } catch (IOException e) {
+                    System.out.println(e.getMessage());
+                }
+            }
+        });
 
         //Setting the position of the image
         imageView.setX(50);
         imageView.setY(25);
 
-        //setting the fit height and width of the image view
-        imageView.setFitHeight(455);
-        imageView.setFitWidth(500);
+        //REMOVED|Causes issues with screen clip setting the fit height and width of the image view
+        //imageView.setFitHeight(455);
+        //imageView.setFitWidth(500);
 
         //Setting the preserve ratio of the image view
         imageView.setPreserveRatio(true);
@@ -142,8 +190,6 @@ public class DocsFox extends Application
 
         //Setting title to the Stage
         stage.setTitle("DocsFox");
-
-
 
 
         //-------------------------------------Rectangle----------------------------------------------
@@ -196,39 +242,82 @@ public class DocsFox extends Application
                         current_ending_point_y,
                         new_rectangle ) ;
             }
-
-
-
         } ) ;
 
-        /*Export Segment for Sprint2
-        scene.setOnMouseReleased( (MouseEvent event) ->
-                {
-                    Robot robot = null;
-                    try {
-                        robot = new Robot();
-                    } catch (AWTException e) {
-                        e.printStackTrace();
-                    }
+        scene.setOnMousePressed( ( MouseEvent event ) ->
+        {
+            if ( new_rectangle_is_being_drawn == false )
+            {
+                starting_point_x = event.getSceneX() ;
+                starting_point_y = event.getSceneY() ;
 
-                    java.awt.Rectangle captureRect = new java.awt.Rectangle((int)new_rectangle.getX(),(int)new_rectangle.getY(),(int)new_rectangle.getWidth(),(int)new_rectangle.getHeight());
-                    BufferedImage screenFullImage = robot.createScreenCapture(captureRect);
-                    try {
-                        ImageIO.write(screenFullImage, "jpg", new File("C:/Users/mkyn3/IdeaProjects/DocsFox/src/ClippedImgs/ci.jpg"));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
-           */
+
+
+                new_rectangle = new Rectangle() ;
+
+                // A non-finished rectangle has always the same color.
+                new_rectangle.setFill( Color.TRANSPARENT ) ; // Color when it's being drawn
+                new_rectangle.setStroke( Color.BLACK ) ;
+
+                rectangle.getChildren().add( new_rectangle ) ;
+
+                new_rectangle_is_being_drawn = true ;
+            }
+
+            // I added this to make the old rectangle disappear and allow to make a new one
+            if (new_rectangle_is_being_drawn = true )
+            {
+                rectangle.getChildren().remove( new_rectangle ) ;
+                starting_point_x = event.getSceneX() ;
+                starting_point_y = event.getSceneY() ;
+
+                new_rectangle = new Rectangle() ;
+
+                // A non-finished rectangle has always the same color.
+                new_rectangle.setFill( Color.TRANSPARENT ) ; // Color when it's being drawn
+                new_rectangle.setStroke( Color.BLACK ) ;
+
+                rectangle.getChildren().add( new_rectangle ) ;
+            }
+        } ) ;
+
+        scene.setOnMouseDragged( ( MouseEvent event ) ->
+        {
+            if ( new_rectangle_is_being_drawn == true )
+            {
+                double current_ending_point_x = event.getSceneX() ;
+                double current_ending_point_y = event.getSceneY() ;
+
+
+                adjust_rectangle_properties( starting_point_x,
+                        starting_point_y,
+                        current_ending_point_x,
+                        current_ending_point_y,
+                        new_rectangle ) ;
+            }
+        } ) ;
+
+
+        imageView.setPickOnBounds(true);
+        imageView.setOnMousePressed(e ->
+        {
+            startimagex = e.getX()-50;
+            startimagey = e.getY()-25;
+        });
+        imageView.setOnMouseDragged(e ->
+        {
+            testRect.setFrameFromDiagonal(startimagex,startimagey,e.getX()-50,e.getY()-25);
+        });
+
 
         stage.setScene(scene);
         stage.show();
     }
 
-
-
     public static void main( String[] command_line_parameters )
     {
         launch( command_line_parameters ) ;
     }
+
 }
+
