@@ -1,43 +1,28 @@
 package com.team2021grads.docsfox;
-
 import javafx.application.Application;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Rectangle ;
-
+import javafx.scene.shape.Rectangle;
 import java.awt.*;
 import javafx.scene.control.Button;
-import java.awt.event.KeyEvent;
-import java.awt.geom.AffineTransform;
 import java.awt.geom.Rectangle2D;
-import java.awt.geom.Rectangle2D.Double;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.ArrayList;
 import java.util.List;
-
 import javafx.scene.Group;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.rendering.PDFRenderer;
-import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.PDFTextStripperByArea;
-import org.apache.pdfbox.tools.PDFBox;
-
-import javax.imageio.ImageIO;
-import javax.swing.*;
 import java.nio.file.Paths;
 import java.nio.file.Files;
 
@@ -87,52 +72,64 @@ public class DocsFox extends Application
     public void start( Stage stage ) throws IOException {
         PDFTextStripperByArea PDArea = new PDFTextStripperByArea();
         final int[] cPage = {0};
-        PDDocument doc = PDDocument.load(new File("C:/Users/Oscar/IdeaProjects/Software Engineering Project/z_X10001 LLP Sheet 1 page.pdf"));
-        PDFRenderer renderer = new PDFRenderer(doc);
 
+        //Opens a file chooser and accepts a pdf file from the user
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Open PDF File");
+        PDDocument doc = PDDocument.load(fileChooser.showOpenDialog(stage));
+
+        //Makes an image from the accepted pdf
+        PDFRenderer renderer = new PDFRenderer(doc);
         BufferedImage[] Pages = new BufferedImage[doc.getNumberOfPages()];
         for(int i = 0; i<Pages.length;i++)
         {
             Pages[i] = renderer.renderImage(i);
         }
-
         Image image = SwingFXUtils.toFXImage(Pages[0], null );
-
         ImageView imageView = new ImageView(image);
 
-        Button button = new Button("Confirm");
-        Button button2 = new Button("Next page");
-        Button button3 = new Button("Continue");
+        //Creates a number of buttons and appends them to our Horizontal Box
+        Button extract = new Button("Extract");
+        Button next_page = new Button("Next page");
+        Button export = new Button("Export");
+        Button edit = new Button("Edit CSV");
         HBox hbox = new HBox();
-        hbox.getChildren().add(button);
-        hbox.getChildren().add(button2);
-        hbox.getChildren().add(button3);
+        hbox.getChildren().add(extract);
+        hbox.getChildren().add(next_page);
+        hbox.getChildren().add(export);
+        hbox.getChildren().add(edit);
+        final String[] csvLoc = {""};
 
+        //2D Arraylist of Strings for the storage of data later on
         final List<List<String>> data = new ArrayList<List<String>>();
 
-        button.setOnAction(new EventHandler<ActionEvent>()
+        //Button for extracting data from the pdf
+        extract.setOnAction(new EventHandler<ActionEvent>()
         {
             @Override
             public void handle(ActionEvent event)
             {
+                //Extracts data from specified rectangular region
                 PDArea.addRegion("Test",testRect);
                 try {
                     PDArea.extractRegions(doc.getPage(cPage[0]));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+
+                //Adds data to a 2D arraylist of Strings
                 final List<String> x = new ArrayList<String>();
-                String[] split = (PDArea.getTextForRegion("Test")).split("\\n");;
+                String[] split = (PDArea.getTextForRegion("Test")).split("\\n");
                 for(String newLine : split)
                 {
                     x.add(newLine);
                 }
                 data.add(x);
-                //System.out.println(PDArea.getTextForRegion("Test"));
             }
         });
 
-        button2.setOnAction(new EventHandler<ActionEvent>()
+        //Button for scrolling between pages
+        next_page.setOnAction(new EventHandler<ActionEvent>()
         {
             @Override
             public void handle(ActionEvent event)
@@ -145,27 +142,64 @@ public class DocsFox extends Application
                 {
                     cPage[0] = cPage[0]+1;
                 }
-                imageView.setImage(SwingFXUtils.toFXImage(Pages[cPage[0]], null ));
+                imageView.setImage(SwingFXUtils.toFXImage(Pages[cPage[0]], null )); //Displays current page
             }
         });
 
-        button3.setOnAction(new EventHandler<ActionEvent>()
+        //Button for exporting data as a csv file
+        export.setOnAction(new EventHandler<ActionEvent>()
         {
             @Override
             public void handle(ActionEvent event)
             {
-                final String separate = System.getProperty(",");
                 try
                 {
                     StringBuilder sb = new StringBuilder();
-                    for(int n = 0; n < data.size(); n++)
+                    String current;
+
+                    //parses through 2D arraylist of Data
+                    for(int i = 0; i < getMax(data); i++)
                     {
-                        sb.append(data.get(n));
+                        for(int j = 0; j < data.size(); j++)
+                        {
+                            if(i<data.get(j).size())
+                            {
+                                //gets current cell of data and appends it to the csv
+                                current = data.get(j).get(i);
+                                current = current.replace("\n", "");
+                                current = current.replace("\r", "");
+                                current = current.replace("\r\n", "");
+                                sb.append(current);
+                                sb.append(",");
+                            }
+                        }
+                        sb.append("\n");
                     }
-                    Files.write(Paths.get("C:/Users/Oscar/IdeaProjects/Sprint2/docsfox.csv"), sb.toString().getBytes());
-                    System.out.println("csv file saved!");
+
+                    //Saves CSV to a selected file
+                    fileChooser.setTitle("Save CSV");
+                    Files.write(Paths.get(csvLoc[0] = fileChooser.showSaveDialog(stage).getPath()), sb.toString().getBytes());
                 } catch (IOException e) {
                     System.out.println(e.getMessage());
+                }
+            }
+        });
+
+        //Button for opening the csv file so that it can be edited
+        edit.setOnAction(new EventHandler<ActionEvent>()
+        {
+            @Override
+            public void handle(ActionEvent event)
+            {
+                try
+                {
+                    File files = new File(csvLoc[0]);
+                    Desktop desktop = Desktop.getDesktop();
+                    if(files.exists())         //checks file exists or not
+                        desktop.open(files);              //opens the specified file
+
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             }
         });
@@ -173,10 +207,6 @@ public class DocsFox extends Application
         //Setting the position of the image
         imageView.setX(50);
         imageView.setY(25);
-
-        //REMOVED|Causes issues with screen clip setting the fit height and width of the image view
-        //imageView.setFitHeight(455);
-        //imageView.setFitWidth(500);
 
         //Setting the preserve ratio of the image view
         imageView.setPreserveRatio(true);
@@ -190,6 +220,7 @@ public class DocsFox extends Application
 
         //Setting title to the Stage
         stage.setTitle("DocsFox");
+        stage.setMaximized(true);
 
 
         //-------------------------------------Rectangle----------------------------------------------
@@ -309,15 +340,25 @@ public class DocsFox extends Application
             testRect.setFrameFromDiagonal(startimagex,startimagey,e.getX()-50,e.getY()-25);
         });
 
-
         stage.setScene(scene);
         stage.show();
+    }
+
+    int getMax(List<List<String>> data)
+    {
+        int max = 0;
+        for(int i = 0; i < data.size(); i++)
+        {
+            if(data.get(i).size() > max)
+            {
+                max = data.get(i).size();
+            }
+        }
+        return max;
     }
 
     public static void main( String[] command_line_parameters )
     {
         launch( command_line_parameters ) ;
     }
-
 }
-
